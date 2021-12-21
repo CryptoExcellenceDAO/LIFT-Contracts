@@ -1,1 +1,1 @@
-# LIFT-Contracts
+# LIFT Contracts
