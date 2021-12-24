@@ -74,14 +74,16 @@ describe("Simple IDO Contribution", function () {
                 to: this.wallet,
                 value: ethers.utils.parseEther("0.5")
             });
-            console.log(txhash);
+            //console.log(txhash);
+            // TODO
         });
         it('should reject contributions that are too big', async function() {
             const txhash = await this.investor.sendTransaction({
                 to: this.wallet,
                 value: ethers.utils.parseEther("21.0")
             });
-            console.log(txhash);
+            //console.log(txhash);
+            // TODO
         });
     });
 

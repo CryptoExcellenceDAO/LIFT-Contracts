@@ -31,3 +31,19 @@ npm install --save-dev @nomiclabs/hardhat-web3 web3
 npm install --save-dev chai
 ```
 
+## Testing Output:
+
+```bash
+  Simple IDO Contribution
+    Accepting Payments
+      ✓ should reject contributions that are too small
+      ✓ should reject contributions that are too big
+    Contribution Process
+      ✓ should forward contribution to wallet
+    Contribution Costs
+BigNumber.toString does not accept any parameters; base-10 is assumed
+      ✓ should cost investor their contribution value + gas
+
+
+  4 passing (1s)
+```
