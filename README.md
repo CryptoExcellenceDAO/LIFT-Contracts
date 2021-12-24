@@ -41,7 +41,6 @@ npm install --save-dev chai
     Contribution Process
       ✓ should forward contribution to wallet
     Contribution Costs
-BigNumber.toString does not accept any parameters; base-10 is assumed
       ✓ should cost investor their contribution value + gas
 
 
