@@ -40,11 +40,11 @@ npm install --save-dev chai-bignumber
   Simple IDO Contribution
     Time and Cap Constraints
       ✓ should be ended when cap is reached
-      ✓ should be ended after end time
+      ✓ should be ended after end
     Accepting Contributions
       ✓ should reject contributions before start
       ✓ should accept valid contributions after start
-      ✓ should reject contributions after end time
+      ✓ should reject contributions after end
     Contribution Process
       ✓ should reject contributions that are too small
       ✓ should reject contributions that are too big

@@ -138,7 +138,7 @@ describe("Simple IDO Contribution", function () {
             ended.should.equal(true);
         });
 
-        it('should be ended after end time', async function() {
+        it('should be ended after end', async function() {
             let ended = await this.idopool.hasEnded();
             ended.should.equal(false);
             await increaseTimeTo(this.afterEndTime, latestTime.timestamp);
@@ -166,7 +166,7 @@ describe("Simple IDO Contribution", function () {
             }).should.be.fulfilled;
         });
 
-        it('should reject contributions after end time', async function() {
+        it('should reject contributions after end', async function() {
             await increaseTimeTo(this.afterEndTime, latestTime.timestamp);
             await this.idopool.send(this.contribution).should.be.rejectedWith('revert');
             await this.idopool.contribute(this.investor.address, {
