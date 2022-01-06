@@ -6,9 +6,9 @@ const should = require("chai")
     .use(require('chai-bignumber')(BigNumber))
     .should();
 
-const SimpleContribution = artifacts.require("SimpleContribution");
+const IdoPool = artifacts.require("IdoPool");
 
-describe("Simple IDO Contribution", function () {
+describe("IDO Pool", function () {
 
     // Increases testrpc time by the passed duration in seconds
     function increaseTime(duration) {
@@ -91,22 +91,23 @@ describe("Simple IDO Contribution", function () {
 
         latestTime = await web3.eth.getBlock('latest');
 
-        const [owner, addr1, addr2] = await ethers.getSigners();
-        this.wallet = addr2.address;
-        this.investor = addr1;
+        const [owner, addr1] = await ethers.getSigners();
+
+        this.wallet = addr1.address;
+        this.investor = owner;
 
         this.startTime = latestTime.timestamp + duration.weeks(1);
         this.endTime = this.startTime + duration.weeks(1);
         this.afterEndTime = this.endTime + duration.seconds(1);
 
-        this.weiMinCont = ethers.utils.parseEther("1.0")
+        this.weiMinCont = ethers.utils.parseEther("0.001")
         this.weiMaxCont = ethers.utils.parseEther("50.0")
         this.cap = ethers.utils.parseEther("100.0")
 
-        this.smallerCont = ethers.utils.parseEther("0.5")
-        this.largerCont = ethers.utils.parseEther("51.0")
+        this.smallerCont = ethers.utils.parseEther("0.0005")
+        this.largerCont = ethers.utils.parseEther("50.1")
 
-        this.idopool = await SimpleContribution.new(
+        this.idopool = await IdoPool.new(
             this.startTime,
             this.endTime,
             this.wallet,
@@ -115,7 +116,7 @@ describe("Simple IDO Contribution", function () {
             this.cap,
         );
 
-        this.contribution = ethers.utils.parseEther("10.0")
+        this.contribution = ethers.utils.parseEther("0.0011")
 
         //console.log('IDO Pool Smart Contract deployed =', this.idopool.address);
     });
@@ -196,7 +197,7 @@ describe("Simple IDO Contribution", function () {
             }).should.be.rejectedWith("Invalid Purchase");
         });
 
-        it("should forward contribution to wallet", async function () {
+        it("should forward contribution to wallet - low level", async function () {
             await increaseTimeTo(this.startTime, latestTime.timestamp);
             const w_start = await web3.eth.getBalance(this.wallet);
 
@@ -254,6 +255,23 @@ describe("Simple IDO Contribution", function () {
 
             // investor ending balance + (gas used * gas price) = investor starting balance - contribution
             pend.add(gas_used.mul(gas_price)).should.be.equal(pstart.sub(this.contribution));
+        });
+
+        it("should forward contribution to wallet - high level", async function () {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            const w_start = await web3.eth.getBalance(this.wallet);
+            await this.idopool.sendTransaction({
+                value: this.contribution,
+                from: this.investor.address
+            });
+            const w_end = await web3.eth.getBalance(this.wallet);
+            const c_end = await web3.eth.getBalance(this.idopool.address);
+            const wend = new ethers.BigNumber.from(w_end);
+            const wstart = new ethers.BigNumber.from(w_start);
+            // contribution went to wallet
+            wend.sub(wstart).should.be.equal(this.contribution);
+            // contribution not in smart contract address, which has nothing
+            c_end.should.be.bignumber.equal(0);
         });
 
         it('should log contribution', async function() {

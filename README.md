@@ -1,5 +1,9 @@
 # LIFT Contracts
 
+## Current Testing Contract:
+
+https://rinkeby.etherscan.io/address/0xa1c39ba3a206459e0370e2b7d492790b6066b245
+
 ## Summary
 
 Smart Contracts for creating and automating IDO investment pools.
@@ -9,13 +13,22 @@ Pools have a start and end timestamps, along with minimum and maximum contributi
 To run tests:
 
 ```bash
+# on hardhat
 npx hardhat test
+# on rinkeby
+npx hardhat test --network <NETWORK_NAME>
 ```
 
 To compile:
 
 ```bash
 npx hardhat compile
+```
+
+To deploy:
+
+```bash
+npx hardhat run scripts/deploy.js --network <NETWORK_NAME>
 ```
 
 ## Packages
@@ -34,10 +47,10 @@ npm install --save-dev chai-as-promised
 npm install --save-dev chai-bignumber
 ```
 
-## Testing Output:
+## Testing Output (hardhat):
 
 ```bash
-  Simple IDO Contribution
+  IDO Pool
     Time and Cap Constraints
       ✓ should be ended when cap is reached
       ✓ should be ended after end
@@ -48,11 +61,13 @@ npm install --save-dev chai-bignumber
     Contribution Process
       ✓ should reject contributions that are too small
       ✓ should reject contributions that are too big
-      ✓ should forward contribution to wallet
+      ✓ should forward contribution to wallet - low level
       ✓ should log contribution
     Contribution Costs
       ✓ should cost investor their contribution value + gas
+      ✓ should forward contribution to wallet - high level
       ✓ should log contribution
 
-  11 passing (2s)
+
+  12 passing (2s)
 ```

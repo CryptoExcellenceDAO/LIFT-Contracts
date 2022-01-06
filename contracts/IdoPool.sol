@@ -6,28 +6,28 @@ import "./openzeppelin/SafeMath.sol";
 //import "./openzeppelin/IERC20.sol";
 import "./openzeppelin/ReentrancyGuard.sol";
 
+/*
 interface IERC20 {
     function transfer(address _to, uint256 _value) external returns (bool);
     // don't need to define other functions, only using `transfer()` in this case
 }
+*/
 
-contract SimpleContribution is Ownable, Pausable, ReentrancyGuard {
+contract IdoPool is Ownable, Pausable, ReentrancyGuard {
     using SafeMath for uint256;
 
     // start and end timestamps where investments are allowed (both inclusive)
     uint256 public startTime;
     uint256 public endTime;
-    // address where funds are collected
-    address payable public wallet;
-    // pool max cap
+     // pool max cap
     uint256 public cap;
     // min and max contribution allowed in wei (both inclusive)
     uint256 public weiMaxCont;
     uint256 public weiMinCont;
+    // address where funds are collected
+    address payable private wallet;
     // amount of raised money in wei
-    uint256 public weiRaised;
-    // ierc20 token
-    IERC20 public token;
+    uint256 private weiRaised;
 
     /**
      * event for token purchase logging
@@ -41,6 +41,15 @@ contract SimpleContribution is Ownable, Pausable, ReentrancyGuard {
         uint256 value
     );
 
+    /**
+     * constructor for IdoPool
+     * @param _startTime pool start time
+     * @param _endTime pool end time
+     * @param _wallet fund collection wallet
+     * @param _weiMaxCont max contribution in wei
+     * @param _weiMinCont min contribution in wei
+     * @param _cap pool cap
+     */
     constructor (
         uint256 _startTime,
         uint256 _endTime,
@@ -65,12 +74,18 @@ contract SimpleContribution is Ownable, Pausable, ReentrancyGuard {
         cap = _cap;
     }
 
-    // fallback function can be used to buy tokens
-    fallback() external payable {
+    /**
+     * @dev fallback function can be used to buy tokens
+     */
+    receive () external payable {
         contribute(msg.sender);
     }
 
-    // low level token purchase function
+    /**
+     * @dev low level token purchase function
+     * function has non-reentrancy guard, so shouldn't be called by another nonReentrant function
+     * @param beneficiary Recipient of the token purchase
+     */
     function contribute(address beneficiary) public payable nonReentrant {
         require(beneficiary != address(0));
         require(validPurchase(), "Invalid Purchase");
@@ -85,12 +100,18 @@ contract SimpleContribution is Ownable, Pausable, ReentrancyGuard {
         forwardFunds();
     }
 
-    // send ether to the fund collection wallet
+    /**
+     * @dev send ether to the fund collection wallet
+     */
     function forwardFunds() internal {
         wallet.transfer(msg.value);
     }
 
-    // @return true if the transaction can buy tokens
+    /**
+     * @dev validation of an incoming purchase
+     * require statements to revert state when conditions are not met
+     * @return true if the transaction is a valid contribution
+     */
     function validPurchase() internal view returns (bool) {
         bool withinCap = weiRaised.add(msg.value) <= cap;
         bool withinPeriod = block.timestamp >= startTime && block.timestamp <= endTime;
@@ -99,14 +120,26 @@ contract SimpleContribution is Ownable, Pausable, ReentrancyGuard {
         return withinCap && withinPeriod && nonZeroPurchase && withinContLimits;
     }
 
-    // @return true if crowdsale event has ended
+    /**
+     * @return true if ido pool has ended
+     */
     function hasEnded() public view returns (bool) {
         bool capReached = weiRaised >= cap;
         bool timeReached = block.timestamp > endTime;
         return capReached || timeReached;
     }
 
-    function getRaised() public view returns (uint256) {
+    /**
+     * @return the address where funds are collected.
+     */
+    function getWallet() public view returns (address payable) {
+        return wallet;
+    }
+
+    /**
+     * @return the amount of wei raised.
+     */
+    function getWeiRaised() public view returns (uint256) {
         return weiRaised;
     }
 
