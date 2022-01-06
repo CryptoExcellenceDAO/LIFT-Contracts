@@ -15,7 +15,7 @@ To run tests:
 ```bash
 # on hardhat
 npx hardhat test
-# on rinkeby
+# on remote network
 npx hardhat test --network <NETWORK_NAME>
 ```
 
