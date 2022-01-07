@@ -2,7 +2,7 @@
 
 ## Current Testing Contract:
 
-https://rinkeby.etherscan.io/address/0xa1c39ba3a206459e0370e2b7d492790b6066b245
+https://rinkeby.etherscan.io/address/0x064F817b139Cf80Ec1297799854A78FDA250A718
 
 ## Summary
 
@@ -45,6 +45,7 @@ npm install --save-dev @nomiclabs/hardhat-truffle5
 npm install --save-dev chai
 npm install --save-dev chai-as-promised
 npm install --save-dev chai-bignumber
+npm install --save-dev node-fetch@2.0
 ```
 
 ## Testing Output (hardhat):
