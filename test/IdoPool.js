@@ -1,4 +1,3 @@
-//import EVMThrow from './helpers/EVMThrow';
 
 const BigNumber = web3.BigNumber;
 const should = require("chai")
@@ -91,10 +90,14 @@ describe("IDO Pool", function () {
 
         latestTime = await web3.eth.getBlock('latest');
 
-        const [owner, addr1] = await ethers.getSigners();
+        const [owner, addr1, addr2, addr3, addr4, addr5] = await ethers.getSigners();
 
         this.wallet = addr1.address;
         this.investor = owner;
+        this.investor2 = addr2;
+        this.admin = addr3;
+        this.investor3 = addr4;
+        this.investor4 = addr5;
 
         this.startTime = latestTime.timestamp + duration.weeks(1);
         this.endTime = this.startTime + duration.weeks(1);
@@ -114,9 +117,18 @@ describe("IDO Pool", function () {
             this.weiMaxCont,
             this.weiMinCont,
             this.cap,
+            this.admin.address
         );
 
         this.contribution = ethers.utils.parseEther("0.0011")
+
+        await this.idopool.addWhitelisted(this.investor.address, {
+            from: this.admin.address
+        });
+
+        await this.idopool.addWhitelisted(this.investor2.address, {
+            from: this.admin.address
+        });
 
         //console.log('IDO Pool Smart Contract deployed =', this.idopool.address);
     });
@@ -131,9 +143,9 @@ describe("IDO Pool", function () {
                 value: this.weiMaxCont,
                 from: this.investor.address
             });
-            await this.idopool.contribute(this.investor.address, {
+            await this.idopool.contribute(this.investor2.address, {
                 value: this.weiMaxCont,
-                from: this.investor.address
+                from: this.investor2.address
             });
             ended = await this.idopool.hasEnded();
             ended.should.equal(true);
@@ -232,6 +244,125 @@ describe("IDO Pool", function () {
             event.args.purchaser.should.equal(this.investor.address);
             event.args.beneficiary.should.equal(this.investor.address);
             event.args.value.toString().should.be.equal(contBN.toString());
+        });
+    });
+
+    describe("Contract Data Objects", function() {
+        it('should update total contributors - one address, multiple contributions', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+            const contributors =  web3.utils.toBN(1); // same contributor, sent funds twice (total still under individual max cap)
+            const total_contributors = await this.idopool.getTotalContributors();
+            contributors.toString().should.be.equal(total_contributors.toString());
+        });
+
+        it('should update total contributors - multiple address, multiple contributions', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+            await this.idopool.contribute(this.investor2.address, {
+                value: this.contribution,
+                from: this.investor2.address
+            });
+            const contributors =  web3.utils.toBN(2);
+            const total_contributors = await this.idopool.getTotalContributors();
+            contributors.toString().should.be.equal(total_contributors.toString());
+        });
+
+        it('should reject last txn before individual total contribution overflow', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+            await this.idopool.contribute(this.investor.address, {
+                value: ethers.utils.parseEther("50.0"),
+                from: this.investor.address
+            }).should.be.rejectedWith('revert');
+        });
+
+        it('should update wei raised with valid contribution', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            const { logs } = await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+
+            const wei_raised = await this.idopool.getWeiRaised();
+            const contBN = web3.utils.toBN(this.contribution);
+            wei_raised.toString().should.be.equal(contBN.toString());
+        });
+
+        it('should not update wei raised with invalid contribution', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+            const wei_raised1 = await this.idopool.getWeiRaised();
+            await this.idopool.contribute(this.investor.address, {
+                value: ethers.utils.parseEther("50.0"),
+                from: this.investor.address
+            }).should.be.rejectedWith('revert');
+            const wei_raised2 = await this.idopool.getWeiRaised();
+            wei_raised1.toString().should.be.equal(wei_raised2.toString());
+        });
+
+        it('should not update total contributors with invalid contribution', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            });
+            const tot_cont1 = await this.idopool.getTotalContributors();
+            await this.idopool.contribute(this.investor.address, {
+                value: ethers.utils.parseEther("50.0"),
+                from: this.investor.address
+            }).should.be.rejectedWith('revert');
+            const tot_cont2 = await this.idopool.getTotalContributors();
+            tot_cont1.toString().should.be.equal(tot_cont2.toString());
+        });
+
+    });
+
+    describe("WhiteList Logic", function () {
+        it("should allow adding whitelisted address from admin", async function () {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.addWhitelisted(this.investor3.address, {
+                from: this.admin.address
+            }).should.be.fulfilled;
+        });
+        it("should reject adding whitelisted address from non-admin", async function () {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.addWhitelisted(this.investor3.address, {
+                from: this.investor2.address
+            }).should.be.rejectedWith('revert');
+            await this.idopool.addWhitelisted(this.investor3.address, {
+                from: this.investor3.address
+            }).should.be.rejectedWith('revert');
+        });
+        it('should reject contributions from non-whitelisted address', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor4.address, {
+                value: this.contribution,
+                from: this.investor4.address
+            }).should.be.rejectedWith("Invalid Purchase");
+        });
+        it('should accept contributions from whitelisted address', async function() {
+            await increaseTimeTo(this.startTime, latestTime.timestamp);
+            await this.idopool.contribute(this.investor.address, {
+                value: this.contribution,
+                from: this.investor.address
+            }).should.be.fulfilled;
         });
     });
 

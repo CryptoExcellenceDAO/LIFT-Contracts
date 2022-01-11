@@ -3,8 +3,10 @@ pragma solidity ^0.8.0;
 
 import "./openzeppelin/Pausable.sol";
 import "./openzeppelin/SafeMath.sol";
-//import "./openzeppelin/IERC20.sol";
 import "./openzeppelin/ReentrancyGuard.sol";
+import "./access/Roles.sol";
+//import "./openzeppelin/IERC20.sol";
+//import "./GSN/Context.sol";
 
 /*
 interface IERC20 {
@@ -13,9 +15,18 @@ interface IERC20 {
 }
 */
 
-contract IdoPool is Ownable, Pausable, ReentrancyGuard {
+contract IdoPool is Pausable, ReentrancyGuard {
     using SafeMath for uint256;
+    using Roles for Roles.Role;
 
+    // keeping track of contributors
+    mapping(address => uint256) public contributions;
+    // whitelisted addresses
+    Roles.Role private whitelisteds;
+    // admin role
+    address private whitelistAdmin;
+    // total number of contributors
+    uint256 public totalContributors;
     // start and end timestamps where investments are allowed (both inclusive)
     uint256 public startTime;
     uint256 public endTime;
@@ -41,6 +52,10 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
         uint256 value
     );
 
+    event WhitelistedAdded(
+        address indexed account
+    );
+
     /**
      * constructor for IdoPool
      * @param _startTime pool start time
@@ -56,11 +71,13 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
         address _wallet,
         uint256 _weiMaxCont,
         uint256 _weiMinCont,
-        uint256 _cap
+        uint256 _cap,
+        address _adminAddr
     ) public {
         require(_startTime >= block.timestamp);
         require(_endTime >= _startTime);
         require(_wallet != address(0));
+        require(_adminAddr != address(0));
         require(_weiMaxCont >= _weiMinCont);
         require(_weiMinCont != 0);
         require(_cap > 0);
@@ -72,6 +89,10 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
         weiMaxCont = _weiMaxCont;
         weiMinCont = _weiMinCont;
         cap = _cap;
+        whitelistAdmin = _adminAddr;
+
+        weiRaised = 0;
+        totalContributors = 0;
     }
 
     /**
@@ -93,7 +114,7 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
         // contribution amount
         uint256 weiAmount = msg.value;
         // update state
-        weiRaised = weiRaised.add(weiAmount);
+        //weiRaised = weiRaised.add(weiAmount);
         // contribution event
         emit TokenContribution(msg.sender, beneficiary, weiAmount);
         // transfer funds
@@ -104,7 +125,19 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
      * @dev send ether to the fund collection wallet
      */
     function forwardFunds() internal {
-        wallet.transfer(msg.value);
+        // This forwards all available gas. Be sure to check the return value!
+        (bool success, ) = wallet.call{value: msg.value}("");
+        // This forwards X gas, which may not be enough if the recipient is a contract and gas costs change.
+        //wallet.transfer(msg.value);
+        if ( success ) {
+            // log contribution
+            if (contributions[msg.sender] == 0) {
+                totalContributors++;
+            }
+            contributions[msg.sender] += msg.value;
+            // update state
+            weiRaised = weiRaised.add(msg.value);
+        }
     }
 
     /**
@@ -117,7 +150,31 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
         bool withinPeriod = block.timestamp >= startTime && block.timestamp <= endTime;
         bool nonZeroPurchase = msg.value != 0;
         bool withinContLimits = msg.value >= weiMinCont && msg.value <= weiMaxCont;
-        return withinCap && withinPeriod && nonZeroPurchase && withinContLimits;
+        bool withinMultiContLimits = (contributions[msg.sender] + msg.value) <= weiMaxCont;
+        bool withinWhiteList = isWhitelisted(msg.sender);
+        return withinCap && withinPeriod && nonZeroPurchase && withinContLimits && withinMultiContLimits && withinWhiteList;
+    }
+
+    modifier onlyWhitelistAdmin() {
+        require(isWhitelistAdmin(msg.sender), "WhitelistAdminRole: caller does not have the WhitelistAdmin role");
+        _;
+    }
+
+    function isWhitelistAdmin(address account) public view returns (bool) {
+        return whitelistAdmin == account;
+    }
+
+    function addWhitelisted(address account) public onlyWhitelistAdmin {
+        _addWhitelisted(account);
+    }
+
+    function _addWhitelisted(address account) internal {
+        whitelisteds.add(account);
+        emit WhitelistedAdded(account);
+    }
+
+    function isWhitelisted(address account) public view returns (bool) {
+        return whitelisteds.has(account);
     }
 
     /**
@@ -141,6 +198,17 @@ contract IdoPool is Ownable, Pausable, ReentrancyGuard {
      */
     function getWeiRaised() public view returns (uint256) {
         return weiRaised;
+    }
+
+    /**
+     * @return the total number of contributors.
+     */
+    function getTotalContributors() public view returns (uint256) {
+        return totalContributors;
+    }
+
+    function getAddrContribution(address account) public view returns (uint256) {
+        return contributions[account];
     }
 
 }
