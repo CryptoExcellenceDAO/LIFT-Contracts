@@ -15,7 +15,6 @@ Pools have a start and end timestamps, along with minimum and maximum contributi
 To run tests:
 
 ```bash
-npx hardhat test
 npx hardhat test --network <NETWORK_NAME>
 ```
 
