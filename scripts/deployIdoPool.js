@@ -70,10 +70,8 @@ async function main() {
 
     const [deployer, addr1] = await hre.ethers.getSigners();
 
-    console.log("Deploying contracts with the account:", deployer.address);
-
-    console.log("Account balance:", (await deployer.getBalance()).toString());
-
+    console.log("Deploying Ido Pool contract with the account:", deployer.address);
+    //console.log("Account balance:", (await deployer.getBalance()).toString());
     console.log("# Of Whitelisted Addresses being added:", winners.length);
 
     const IdoPool = await hre.ethers.getContractFactory("IdoPool");
@@ -86,6 +84,7 @@ async function main() {
     const cap = hre.ethers.utils.parseEther(parseFloat(idoData.poolcap).toString());
     const wallet = addr1.address;
     const admin = deployer;
+    const usdtContract = "0x946ca9f234c2d6d5d3e5bd805742dcf7637f38e7"; // this was from toktest deployment
 
     console.log("Pool Wallet: ", wallet);
 
@@ -96,29 +95,19 @@ async function main() {
         weiMaxCont,
         weiMinCont,
         cap,
-        admin.address
+        admin.address,
+        usdtContract
     );
 
     console.log("IDO Pool address:", idopool.address);
 
+    whitelisted = winners;
+    whitelisted.push(admin.address); // include admin address
+
     await idopool.addWhitelisted(
-        admin.address,
+        whitelisted,
         {from:admin.address}
     )
-
-    /* TODO: Sometimes these fail due to gas, fix
-    for (let i = 0; i < winners.length; i++) {
-        try {
-            await idopool.addWhitelisted(
-                winners[i],
-                {from:admin.address}
-            )
-        } catch (e) {
-            console.log('error adding to whitelist:',winners[i]);
-            console.log(e);
-        }
-    }
-    */
 
 }
 

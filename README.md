@@ -1,21 +1,21 @@
 # LIFT Contracts
 
-## Current Testing Contract:
+## Gitbook
 
-https://rinkeby.etherscan.io/address/0x064F817b139Cf80Ec1297799854A78FDA250A718
+https://crypto-excellence.gitbook.io/crypto-excellence-dao-documentation/
 
 ## Summary
 
-Smart Contracts for creating and automating IDO investment pools.
+Smart Contract for creating and automating IDO investment pools.
 
-Pools have a start and end timestamps, along with minimum and maximum contribution amounts. Investors can contribute to IDO pools to receive future tokens based on a rate set in USDT, USDC, or alternatives. Funds collected are forwarded to a wallet as they arrive.
+Smart Contract for staking, leveraging UniswapV2Pairs for specialized reward distribution based on derived token share from LP.
+
+Pools have a start and end timestamps, along with minimum and maximum contribution amounts. Investors can contribute to IDO pools to receive future tokens based on a rate set in USDT, USDC, or alternatives. Funds collected are forwarded to a wallet as they arrive. More info on the intended functionality for pools and staking can be found in the gitbook documentation.
 
 To run tests:
 
 ```bash
-# on hardhat
 npx hardhat test
-# on remote network
 npx hardhat test --network <NETWORK_NAME>
 ```
 
@@ -28,7 +28,7 @@ npx hardhat compile
 To deploy:
 
 ```bash
-npx hardhat run scripts/deploy.js --network <NETWORK_NAME>
+npx hardhat run scripts/<SCRIPT_NAME>.js --network <NETWORK_NAME>
 ```
 
 ## Packages
@@ -46,29 +46,5 @@ npm install --save-dev chai
 npm install --save-dev chai-as-promised
 npm install --save-dev chai-bignumber
 npm install --save-dev node-fetch@2.0
-```
-
-## Testing Output (hardhat):
-
-```bash
-  IDO Pool
-    Time and Cap Constraints
-      ✓ should be ended when cap is reached
-      ✓ should be ended after end
-    Accepting Contributions
-      ✓ should reject contributions before start
-      ✓ should accept valid contributions after start
-      ✓ should reject contributions after end
-    Contribution Process
-      ✓ should reject contributions that are too small
-      ✓ should reject contributions that are too big
-      ✓ should forward contribution to wallet - low level
-      ✓ should log contribution
-    Contribution Costs
-      ✓ should cost investor their contribution value + gas
-      ✓ should forward contribution to wallet - high level
-      ✓ should log contribution
-
-
-  12 passing (2s)
+# and any others
 ```
