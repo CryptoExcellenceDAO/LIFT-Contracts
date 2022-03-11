@@ -38,7 +38,7 @@ node scripts/deployIdoPool.js --ido_id <IDO_ID> # network is determined by env v
 
 ## Packages
 
-First install Hardhat, and node, npm if you don't have them.
+First install Hardhat, and node, npm
 
 Then:
 
