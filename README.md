@@ -6,9 +6,9 @@ https://crypto-excellence.gitbook.io/crypto-excellence-dao-documentation/
 
 ## Summary
 
-Smart Contract for creating and automating IDO investment pools.
+Smart Contracts for creating and automating IDO investment pools.
 
-Smart Contract for staking, leveraging UniswapV2Pairs for specialized reward distribution based on derived token share from LP.
+Smart Contracts for staking, leveraging UniswapV2Pairs for specialized reward distribution based on derived token share from LP.
 
 Pools have a start and end timestamps, along with minimum and maximum contribution amounts. Investors can contribute to IDO pools to receive future tokens based on a rate set in USDT, USDC, or alternatives. Funds collected are forwarded to a wallet as they arrive. More info on the intended functionality for pools and staking can be found in the gitbook documentation.
 
@@ -24,10 +24,16 @@ To compile:
 npx hardhat compile
 ```
 
-To deploy:
+To deploy Staking or other contracts:
 
 ```bash
 npx hardhat run scripts/<SCRIPT_NAME>.js --network <NETWORK_NAME>
+```
+
+To deploy Ido Pools:
+
+```bash
+node scripts/deployIdoPool.js --ido_id <IDO_ID> # network is determined by env var
 ```
 
 ## Packages
