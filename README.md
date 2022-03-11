@@ -24,10 +24,16 @@ To compile:
 npx hardhat compile
 ```
 
-To deploy:
+To deploy Staking or other contracts:
 
 ```bash
 npx hardhat run scripts/<SCRIPT_NAME>.js --network <NETWORK_NAME>
+```
+
+To deploy Ido Pools:
+
+```bash
+node scripts/deployIdoPool.js --ido_id <IDO_ID> # network is determined by env var
 ```
 
 ## Packages
