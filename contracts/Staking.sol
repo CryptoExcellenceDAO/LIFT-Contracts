@@ -38,14 +38,14 @@ contract Staking is Context, Pausable {
     uint256 public startTime;
     // The block timestamp when reward mining ends
     uint256 public endTime;
-    // Rewards per second
-    uint256 public rewardsPerSecond;
     // Info of each pool
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
-    // total allocation points assigned to pools
+    // Total allocation points assigned to pools
     uint256 public totalAllocPoint = 0;
+    // Time lock for each LP pool
+    mapping(address => uint256) public lockTime;
 
     /**
      * event for deposit logging
@@ -74,36 +74,52 @@ contract Staking is Context, Pausable {
     /**
      * constructor for Staking
      * require statements to revert contract initiation when conditions are not met
-     * checks end time greater than or equal to start time
-     * checks rewards per second value is greater than zero
+     * checks end time greater than start time
+     * checks start time greater than or equal to current block timestamp
      * @param _ceToken erc20 ce token for rewards
-     * @param _rewardsPerSecond rewards per second
      * @param _startTime start time of reward mining
      * @param _endTime end time of reward mining
      */
     constructor (
         IERC20 _ceToken,
-        uint256 _rewardsPerSecond,
         uint256 _startTime,
         uint256 _endTime
     ) public {
-        require(_endTime >= _startTime);
-        require(_rewardsPerSecond > 0);
+        require(_endTime > _startTime);
+        require(_startTime >= block.timestamp);
         CeToken = _ceToken;
-        rewardsPerSecond = _rewardsPerSecond;
         startTime = _startTime;
         endTime = _endTime;
     }
 
+    /**
+     * @dev Time lock for adding lp pool. Can only be called by the owner.
+     * This will set the locktime for an lp pool to 48 hours after current block timestamp
+     * @param _lpToken the lp token for the pool
+     */
+    function addTimeLock(IERC20 _lpToken) public onlyOwner {
+        lockTime[address(_lpToken)] = block.timestamp + 172800;
+    }
 
     /**
-     * @dev Add a new lp to the pool. Can only be called by the owner.
+     * @dev Add a new lp to the pool, reset the locktime for that pool. Can only be called by the owner.
      * XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
+     * require statements to revert state when conditions are not met
+     * checks whether CeToken is in the _lpToken pair before being added as a pool
+     * checks whether locktime was initiated for the lp pool
+     * checks whether current block timestamp is greater than locktime for the lp pool
      * @param _allocPoint pool allocation points (unused in other methods)
-     * @param _lpToken the lp token address for the pool
-     * @param _pegToken the peg token address for the pool
+     * @param _lpToken the lp token for the pool
+     * @param _pegToken the peg token for the pool
      */
     function add(uint256 _allocPoint, IERC20 _lpToken, IERC20 _pegToken) public onlyOwner {
+        IUniswapV2Pair pair = IUniswapV2Pair(address(_lpToken));
+        IERC20 token0 = IERC20(pair.token0());
+        IERC20 token1 = IERC20(pair.token1());
+        require(address(token0) == address(CeToken) || address(token1) == address(CeToken), "add: CeToken not found in pair");
+        require(lockTime[address(_lpToken)] != 0, "add: timelock not initiated");
+        require(block.timestamp > lockTime[address(_lpToken)], "add: timelock not complete");
+        lockTime[address(_lpToken)] = 0;
         uint256 lastRewardTime = block.timestamp > startTime ? block.timestamp : startTime;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         poolInfo.push(PoolInfo({
@@ -125,7 +141,7 @@ contract Staking is Context, Pausable {
      * @param _pid the pool index
      * @param _amount the amount of LP tokens being deposited
      */
-    function deposit(uint256 _pid, uint256 _amount) public {
+    function deposit(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         if (user.amountCe > 0 && user.amount > 0) {
@@ -151,7 +167,7 @@ contract Staking is Context, Pausable {
      * checks current block timestamp is greater than user deposit time
      * @param _pid the pool index
      */
-    function withdrawCooldown(uint256 _pid) public {
+    function withdrawCooldown(uint256 _pid) public validatePoolByPid(_pid) {
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount > 0);
         require(user.amountCe > 0);
@@ -166,7 +182,7 @@ contract Staking is Context, Pausable {
      * checks whether user LP deposit is greater than or equal to withdrawal request amount
      * checks whether withdrawal cooldown was initiated
      * checks whether user withdrawal request occurs after deposit time
-     * checks whether current block timestamp is greater than or equal to user withdrawal request timestamp plus 48h (enforcing the cooldown period)
+     * checks whether current block timestamp is greater than user withdrawal request timestamp plus 48h (enforcing the cooldown period)
      * This will transfer any pending rewards to the user
      * This will transfer the LP token amount to the user
      * This will transfer the peg token to the contract that is proportional to the LP token amount being withdrawn to the user
@@ -174,7 +190,7 @@ contract Staking is Context, Pausable {
      * @param _pid the pool index
      * @param _amount the amount of LP tokens being withdrawn
      */
-    function withdraw(uint256 _pid, uint256 _amount) public {
+    function withdraw(uint256 _pid, uint256 _amount) public validatePoolByPid(_pid) {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: can't withdraw more than deposit");
@@ -220,7 +236,7 @@ contract Staking is Context, Pausable {
      * @param _user the address of user
      * @return amount of ce rewards
      */
-    function computeReward(uint256 _pid, address _user) public view returns (uint256) {
+    function computeReward(uint256 _pid, address _user) public view validatePoolByPid(_pid) returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
         require(block.timestamp >= user.depositTime);
 
@@ -236,8 +252,8 @@ contract Staking is Context, Pausable {
         uint256 daySinceDeposit = secSinceDeposit / 86400;
         uint256 hoursSinceDeposit = secSinceDeposit / 3600;
         uint256 baseApy = 4996358; // = (1.2^(1/365)-1) * 1e10
-        uint256 baseApyHr = 208181; // = (1.2^(1/8760)-1) * 1e10
-        uint256 baseApySec = 57775; // = (1.2^(1/31556926)-1) * 1e13
+        uint256 baseApyHr = 208131; // = (1.2^(1/8760)-1) * 1e10, SED-04
+        uint256 baseApySec = 51873; // = (1.2^(1/31536000)-1) * 1e13, SED-04
 
         if (daySinceDeposit >= 1) {
             for (uint t = 1; t <= daySinceDeposit; t++) {
@@ -277,7 +293,7 @@ contract Staking is Context, Pausable {
      * @param _amount the amount of LP token being deposited
      * @return amount of ce that corresponds to the lp deposit amount
      */
-    function computeCeShareFromLp(uint256 _pid, uint256 _amount) public view returns (uint256) {
+    function computeCeShareFromLp(uint256 _pid, uint256 _amount) public view validatePoolByPid(_pid) returns (uint256) {
         PoolInfo storage pool = poolInfo[_pid];
         uint256 totalLpSupply = pool.lpToken.totalSupply();
         IUniswapV2Pair pair = IUniswapV2Pair(address(pool.lpToken));
@@ -302,7 +318,7 @@ contract Staking is Context, Pausable {
      * @param _amount the amount of LP token being withdrawn
      * @return amount of ce that corresponds to the lp withdrawal amount
      */
-    function propCeShare(uint256 _pid, address _user, uint256 _amount) public view returns (uint256) {
+    function propCeShare(uint256 _pid, address _user, uint256 _amount) public view validatePoolByPid(_pid) returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 propCe = _amount.mul(user.amountCe).div(user.amount);
         return propCe;
@@ -314,7 +330,7 @@ contract Staking is Context, Pausable {
      * @param _user the address of user
      * @return the amount of pending ce rewards
      */
-    function pendingRewards(uint256 _pid, address _user) external view returns (uint256) {
+    function pendingRewards(uint256 _pid, address _user) external view validatePoolByPid(_pid) returns (uint256) {
         uint256 rewardAmount = computeReward(_pid, _user);
         return rewardAmount;
     }
@@ -325,7 +341,7 @@ contract Staking is Context, Pausable {
      * @param _user the address of user
      * @return the amount of LP tokens deposited
      */
-    function deposited(uint256 _pid, address _user) external view returns (uint256) {
+    function deposited(uint256 _pid, address _user) external view validatePoolByPid(_pid) returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
         return user.amount;
     }
@@ -336,7 +352,7 @@ contract Staking is Context, Pausable {
      * @param _user the address of user
      * @return the amount of CE share corresponding to deposited LP amount at the time of deposit(s)
      */
-    function depositedCe(uint256 _pid, address _user) external view returns (uint256) {
+    function depositedCe(uint256 _pid, address _user) external view validatePoolByPid(_pid) returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
         return user.amountCe;
     }
@@ -347,7 +363,7 @@ contract Staking is Context, Pausable {
      * @param _user the address of user
      * @return the most recent user deposit timestamp
      */
-    function depositedTime(uint256 _pid, address _user) external view returns (uint256) {
+    function depositedTime(uint256 _pid, address _user) external view validatePoolByPid(_pid) returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
         return user.depositTime;
     }
@@ -358,9 +374,17 @@ contract Staking is Context, Pausable {
      * @param _user the address of user
      * @return the latest user withdrawal request time, can be zero if it hasn't been requested
      */
-    function depositWithdrawRequest(uint256 _pid, address _user) external view returns (uint256) {
+    function depositWithdrawRequest(uint256 _pid, address _user) external view validatePoolByPid(_pid) returns (uint256) {
         UserInfo storage user = userInfo[_pid][_user];
         return user.withdrawRequest;
+    }
+
+    /**
+     * @dev Modifier that requires a pool with _pid to exist.
+     */
+    modifier validatePoolByPid(uint256 _pid) {
+        require (_pid < poolInfo.length , "Pool does not exist") ;
+        _;
     }
 
 }

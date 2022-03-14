@@ -1,3 +1,4 @@
+require("dotenv").config();
 const hre = require("hardhat");
 
 async function main() {
@@ -11,21 +12,18 @@ async function main() {
     //const blockNum = await web3.eth.getBlockNumber();
     //const latestBlock = await hre.ethers.provider.getBlock("latest")
 
-    const ceTokenAddr = "0x1D8995b989CB51D7A438c0cF273eE26085b911D7";
-    const rewardsPerBlock = 10000000;
-    const startTime = 1643835781;
-    const endTime = 2643835781;
+    const ceTokenAddr = process.env.CE_TOKEN_ADDR;
+    const startTime = process.env.STAKING_START_TIME;
+    const endTime = process.env.STAKING_END_TIME;
 
     const Staking = await hre.ethers.getContractFactory("Staking");
     const staking = await Staking.deploy(
         ceTokenAddr,
-        rewardsPerBlock,
         startTime,
         endTime
     );
 
-    const allocPoint = 1;
-    const lpAddr = "0x909b6b5fd50ff0a7b22f804062f4b33670a74d85";
+    const lpAddr = process.env.LP_PAIR_ADDR;
 
     console.log("Deploying xCE contract with the account:", deployer.address);
 
@@ -40,18 +38,22 @@ async function main() {
         StakingContract
     );
 
-    await staking.add(
-        allocPoint,
-        lpAddr,
-        xCe.address
-    )
-
     console.log("==================================");
-    console.log("CE address:", ceTokenAddr);
+    console.log("Staking address:", StakingContract);
     console.log("LP address:", lpAddr);
-    console.log("Staking address:", staking.address);
+    console.log("CE address:", ceTokenAddr);
     console.log("xCE address:", xCe.address);
     console.log("==================================");
+
+    console.log("Starting time lock");
+
+    await staking.addTimeLock(
+        lpAddr
+    );
+
+    console.log("Time lock started")
+    console.log("After 48 hours, add the lp pool");
+
 }
 
 main()
