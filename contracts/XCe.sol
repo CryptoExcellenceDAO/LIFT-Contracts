@@ -16,7 +16,7 @@ contract XCe is ERC20 {
         // set transfer admin (staking contract)
         transferAdmin = _transferAdmin;
         // Mint tokens to transfer admin (staking contract)
-        _mint(_transferAdmin, 100000 * 10**uint(decimals()));
+        _mint(_transferAdmin, 1000000 * 10**uint(decimals()));
     }
 
     /**
