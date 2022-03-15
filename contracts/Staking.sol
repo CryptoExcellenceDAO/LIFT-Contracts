@@ -1,17 +1,57 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.4;
 
 import "./openzeppelin/Pausable.sol";
-import "./openzeppelin/SafeMath.sol";
 import "./openzeppelin/IERC20.sol";
 import "./openzeppelin/SafeERC20.sol";
 import "./openzeppelin/Context.sol";
 import "./univ2/UniswapV2Pair.sol";
+import "./prb-math/PRBMathUD60x18.sol";
+//import "./openzeppelin/SafeMath.sol";
+
+/*
+ `SafeMath` is generally not needed starting with Solidity 0.8, since the compiler
+ * now has built in overflow checking.
+ */
 
 contract Staking is Context, Pausable {
-    using SafeMath for uint256;
+    using PRBMathUD60x18 for uint256;
     using SafeERC20 for IERC20;
+
+    // apy per second array for each month
+    // scaling is for PRBMathUD60x18 pow function
+    // apy increased by 7% on a monthly basis, capped at 12 months
+    uint256[] internal apysSecScaled = [
+        1000000005781378710, // = (1e18 + ((1.2^(1/31536000)-1) * 1e18))
+        1000000006186075219, // = previous * 1.07
+        1000000006619100485, // ...
+        1000000007082437519,
+        1000000007578208145,
+        1000000008108682715,
+        1000000008676290505,
+        1000000009283630841,
+        1000000009933484999,
+        1000000010628828949,
+        1000000011372846976,
+        1000000012168946264
+    ];
+
+    // apy per month array for each month, similar to above
+    uint256[] internal apysMonScaled = [
+        15309470490000000, // = ((1.2^(1/12)-1) * 1e18)
+        16381133420000000, // = previous * 1.07
+        17527812203000000, // ...
+        18754759057200000,
+        20067592191200000,
+        21472323644600000,
+        22975386299700000,
+        24583663340700000,
+        26304519774500000,
+        28145836158700000,
+        30116044689800000,
+        32224167818100000
+    ];
 
     // Info of each user.
     struct UserInfo {
@@ -93,6 +133,39 @@ contract Staking is Context, Pausable {
     }
 
     /**
+     * @dev Gets per second apy for a given month using array
+     * This will return relative to a month until it is constant after month 12
+     * @param i the index (month #)
+     * @return the scaled apy per sec
+     */
+    function getApySecScaled(uint i) internal view returns (uint256) {
+        uint256 apy = 0;
+        if (i >= 11) {
+            apy = apysSecScaled[11];
+        } else if (i >= 0) {
+            apy = apysSecScaled[i];
+        }
+        return apy;
+    }
+
+    /**
+     * @dev Gets per month apy for a given month using array
+     * This will return relative to a month until it is constant after month 12
+     * @param i the index (month #)
+     * @return the scaled apy per month
+     */
+    function getApyMonScaled(uint i) internal view returns (uint256) {
+        uint256 apy = 0;
+        if (i >= 11) {
+            apy = apysMonScaled[11];
+        } else if (i >= 0) {
+            apy = apysMonScaled[i];
+        }
+        return apy;
+    }
+
+
+    /**
      * @dev Time lock for adding lp pool. Can only be called by the owner.
      * This will set the locktime for an lp pool to 48 hours after current block timestamp
      * @param _lpToken the lp token for the pool
@@ -121,7 +194,7 @@ contract Staking is Context, Pausable {
         require(block.timestamp > lockTime[address(_lpToken)], "add: timelock not complete");
         lockTime[address(_lpToken)] = 0;
         uint256 lastRewardTime = block.timestamp > startTime ? block.timestamp : startTime;
-        totalAllocPoint = totalAllocPoint.add(_allocPoint);
+        totalAllocPoint = totalAllocPoint + _allocPoint;
         poolInfo.push(PoolInfo({
             lpToken: _lpToken,
             allocPoint: _allocPoint,
@@ -151,8 +224,8 @@ contract Staking is Context, Pausable {
         uint256 _amountCe = computeCeShareFromLp(_pid, _amount);
         pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
         pool.pegToken.safeTransfer(address(msg.sender), _amountCe);
-        user.amount = user.amount.add(_amount);
-        user.amountCe = user.amountCe.add(_amountCe);
+        user.amount = user.amount + _amount;
+        user.amountCe = user.amountCe + _amountCe;
         user.depositTime = block.timestamp;
         user.withdrawRequest = 0;
         emit Deposit(msg.sender, _pid, _amount);
@@ -201,8 +274,8 @@ contract Staking is Context, Pausable {
         require(user.amountCe >= _amountCe, "withdraw: peg token exceeds deposit");
         uint256 rewardAmount = computeReward(_pid, address(msg.sender));
         safeCeTransfer(msg.sender, rewardAmount);
-        user.amount = user.amount.sub(_amount);
-        user.amountCe = user.amountCe.sub(_amountCe);
+        user.amount = user.amount - _amount;
+        user.amountCe = user.amountCe - _amountCe;
         user.withdrawRequest = 0;
         pool.pegToken.safeTransferFrom(address(msg.sender), address(this), _amountCe);
         pool.lpToken.safeTransfer(address(msg.sender), _amount);
@@ -230,8 +303,7 @@ contract Staking is Context, Pausable {
      * require statements to revert state when conditions are not met
      * checks current block timestamp is greater than user deposit timestamp
      * This will backwards compute the pending CE rewards for a given user based on their deposit time and a preset apy scheme
-     * The time since user deposit is separated into days, hours, and minutes for faster computes
-     * apy is increased by 7% on a monthly basis, until 12 months at which point the apy is capped
+     * Uses pow function from advanced math library PRBMath, based on the insight that x^y = 2^(log2(x) * y)
      * @param _pid the pool index
      * @param _user the address of user
      * @return amount of ce rewards
@@ -240,45 +312,54 @@ contract Staking is Context, Pausable {
         UserInfo storage user = userInfo[_pid][_user];
         require(block.timestamp >= user.depositTime);
 
-        // solidity likes whole numbers, we cant divide or use fractions in operations
-        // we also have to be careful of overflow when using power operator
         uint256 lastTime = block.timestamp < endTime ? block.timestamp : endTime;
-        uint256 secSinceDeposit = lastTime.sub(user.depositTime); // time between current block and user deposit to staking
+        uint256 secSinceDeposit = lastTime - user.depositTime; // time between current block and user deposit to staking
 
         uint256 rewards = 0;
         uint256 total = user.amountCe;
 
-        // X time since user deposit, rounded down automatically
-        uint256 daySinceDeposit = secSinceDeposit / 86400;
-        uint256 hoursSinceDeposit = secSinceDeposit / 3600;
-        uint256 baseApy = 4996358; // = (1.2^(1/365)-1) * 1e10
-        uint256 baseApyHr = 208131; // = (1.2^(1/8760)-1) * 1e10, SED-04
-        uint256 baseApySec = 51873; // = (1.2^(1/31536000)-1) * 1e13, SED-04
+        uint256 baseApySecScaled = getApySecScaled(0);
+        uint256 secSinceDepositScaled = secSinceDeposit * 1e18;
+        uint256 secInOneMonth = 2592000;
+        uint256 monthSinceDeposit = secSinceDeposit / secInOneMonth; // automatic floor in solidity
 
-        if (daySinceDeposit >= 1) {
-            for (uint t = 1; t <= daySinceDeposit; t++) {
-                if (t % 30 == 0 && t < 365) {
-                    baseApy = baseApy.mul(107).div(100);
-                    baseApySec = baseApySec.mul(107).div(100);
-                    baseApyHr = baseApyHr.mul(107).div(100);
+        if (secSinceDeposit > 0) {
+            // if there has been any seconds since user deposit
+            if (monthSinceDeposit == 0) {
+                // if less than a month
+                // use pow function and scaled apy per sec for compounding
+                rewards = (((total * (baseApySecScaled.pow(secSinceDepositScaled))) / 1e18) - total);
+            } else if (monthSinceDeposit >= 1) {
+                // if one month or more
+                // first iterate through up to 12 months
+                // use loop and apy per month for compounding
+                uint256 r = 0;
+                uint256 curMonApyScaled = 0;
+                for (uint t = 0; t < monthSinceDeposit; t++) {
+                    curMonApyScaled = getApyMonScaled(t);
+                    r = ((total * curMonApyScaled) / 1e18);
+                    rewards = rewards + r;
+                    total = total + r;
+                    if (t == 11) {
+                        // break if month 12
+                        break;
+                    }
                 }
-                rewards = rewards + total.mul(baseApy).div(1e10);
-                total = total + total.mul(baseApy).div(1e10);
-            }
-            secSinceDeposit = secSinceDeposit.sub(daySinceDeposit.mul(86400));
-            hoursSinceDeposit = secSinceDeposit / 3600;
-        }
-        if (hoursSinceDeposit >= 1) {
-            for (uint t = 1; t <= hoursSinceDeposit; t++) {
-                rewards = rewards + total.mul(baseApyHr).div(1e10);
-                total = total + total.mul(baseApyHr).div(1e10);
-            }
-            secSinceDeposit = secSinceDeposit.sub(hoursSinceDeposit.mul(3600));
-        }
-        if (secSinceDeposit >= 1) {
-            for (uint t = 1; t <= secSinceDeposit; t++) {
-                rewards = rewards + total.mul(baseApySec).div(1e13);
-                total = total + total.mul(baseApySec).div(1e13);
+                if (monthSinceDeposit > 12) {
+                    // if there are more than 12 months
+                    // use pow function and scaled apy per month for compounding
+                    uint256 monthDifScaled = ((monthSinceDeposit - 12) * 1e18);
+                    curMonApyScaled = curMonApyScaled + 1e18;
+                    r = (((total * (curMonApyScaled.pow(monthDifScaled))) / 1e18) - total);
+                    rewards = rewards + r;
+                    total = total + r;
+                }
+                // for any remaining seconds after monthly compounding
+                // use pow function and scaled apy per sec for compounding
+                uint256 curSecApy = getApySecScaled(monthSinceDeposit);
+                secSinceDeposit = (secSinceDeposit - (monthSinceDeposit * secInOneMonth));
+                secSinceDepositScaled = secSinceDeposit * 1e18;
+                rewards = rewards + (((total * (curSecApy.pow(secSinceDepositScaled))) / 1e18) - total);
             }
         }
         return rewards;
