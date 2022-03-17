@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 const hre = require("hardhat");
 
 //const API_URL = 'http://127.0.0.1:3000/api/v1'
-const API_URL = 'https://app.cryptoexcellence.xyz/api/v1/'
+const API_URL = 'https://app.cryptoexcellence.xyz/api/v1'
 const CE_IDO_BY_ID = API_URL+'/idos?idoid=';
 const CE_LOTTERY_BY_IDO_ID = API_URL+'/lottery/ido?idoid=';
 const CE_UPDATE_IDO_BY_ID = API_URL+'/idos/update/';
@@ -121,6 +121,7 @@ async function main() {
 
     whitelisted = winners;
     whitelisted.push(admin.address); // include admin address
+    whitelisted.push("0x94C4C1b0d9D6569a181811ec3D1B3c96DABFc494"); // include another admin address for now
 
     await idopool.addWhitelisted(
         whitelisted,
