@@ -14,6 +14,11 @@ module.exports = {
       url: `https://eth-rinkeby.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
       accounts: [`${process.env.ACC_1_PRIVATE_KEY}`,`${process.env.ACC_2_PRIVATE_KEY}`],
       gasPrice: "auto",
+    },
+    mainnet: {
+      url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
+      accounts: [`${process.env.ACC_1_PRIVATE_KEY}`,`${process.env.ACC_2_PRIVATE_KEY}`],
+      gasPrice: "auto",
     }
   },
   solidity: {
