@@ -40,14 +40,17 @@ node scripts/deployIdoPool.js --ido_id <IDO_ID> # network is determined by env v
 
 First install node, npm
 
-Then install Hardhat:
+To install packages
 ```bash
-npm install --save-dev hardhat
+# from inside directory
+npm install
 ```
 
-Then:
+To install and save packages individually
 
 ```bash
+# from inside directory
+npm install --save-dev hardhat
 npm install --save-dev @nomiclabs/hardhat-ethers ethers
 npm install --save-dev @nomiclabs/hardhat-waffle ethereum-waffle
 npm install --save-dev @nomiclabs/hardhat-web3 web3
