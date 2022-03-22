@@ -9,13 +9,13 @@ async function main() {
     console.log("Account balance:", (await deployer.getBalance()).toString());
     console.log("Adding LP to Staking contract with the account:", deployer.address);
 
-    const stakingAddr = "0xf0cd90fCf590486171642d7b050e1CA9D3904a13";
+    const stakingAddr = "0xf8Bb91817A960C3e23AE8ae75dE1C070Faee0823";
     const Staking = await hre.ethers.getContractFactory("Staking");
     const staking = await Staking.attach(stakingAddr);
 
     const allocPoint = 1;
     const lpAddr = process.env.LP_PAIR_ADDR;
-    const xCeAddr = "0xd24743FcCbf47b8e67B4E789C0e39EF692C2Adb6";
+    const xCeAddr = "0x879374796e4575a903BAFC82e3fD18E4fd59DE80";
 
     await staking.add(
         allocPoint,

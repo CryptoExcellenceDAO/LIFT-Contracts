@@ -102,7 +102,8 @@ async function main() {
 
     const wallet = process.env.POOL_WALLET;
     const admin = deployer;
-    const usdtContract = "0x946ca9f234c2d6d5d3e5bd805742dcf7637f38e7"; // this was from toktest deployment
+    const usdtContract = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+    //"0x946ca9f234c2d6d5d3e5bd805742dcf7637f38e7"; // this was from toktest deployment
 
     console.log("Pool Wallet: ", wallet);
 
@@ -121,7 +122,7 @@ async function main() {
 
     whitelisted = winners;
     whitelisted.push(admin.address); // include admin address
-    whitelisted.push("0x94C4C1b0d9D6569a181811ec3D1B3c96DABFc494"); // include another admin address for now
+    //whitelisted.push("0x94C4C1b0d9D6569a181811ec3D1B3c96DABFc494"); // include another admin address
 
     await idopool.addWhitelisted(
         whitelisted,
