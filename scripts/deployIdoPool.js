@@ -140,7 +140,8 @@ async function main() {
             poolcap: idoData.poolcap,
             progress: idoData.progress,
             num_participants: idoData.num_participants,
-            contract_address: idopool.address
+            contract_address: idopool.address,
+            network: idopool.network
         }
     )
 
